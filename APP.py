@@ -56,6 +56,11 @@ ACCESSORY_DEFAULTS = {
         ('Pendlay Row', 4, 6, 8),
         ('Face Pulls', 3, 15, 7),
         ('Tricep Pressdown', 3, 10, 7),
+        ('Overhead Press', 3, 5, 8),
+        ('Lat Pulldown', 3, 8, 7.5),
+        ('Dumbbell Row', 4, 8, 8),
+        ('Banded Push-ups', 3, 10, 7),
+        ('Hammer Curl', 3, 10, 7),
     ],
     'Lower': [
         ('Romanian Deadlift', 3, 6, 8),
@@ -63,12 +68,22 @@ ACCESSORY_DEFAULTS = {
         ('GHR / Hamstring Curl', 3, 8, 8),
         ('Back Extensions', 3, 12, 7),
         ('Ab Wheel / Plank', 3, 30, 7),
+        ('Front Squat (variations)', 3, 5, 8),
+        ('Goblet Squat', 3, 8, 7.5),
+        ('Leg Press', 3, 10, 7),
+        ('Calf Raises', 4, 12, 7),
+        ('Hip Thrust', 3, 8, 8),
     ],
     'Deadlift': [
         ('Deficit Deadlift', 3, 3, 8),
         ('Rack Pulls', 3, 5, 8),
         ('Bent-over Row', 4, 6, 8),
         ('Hamstring Curl', 3, 10, 7),
+        ('Block Pulls', 3, 3, 8),
+        ('Kettlebell Swings', 3, 12, 7),
+        ('Glute Bridge', 3, 8, 7.5),
+        ('Farmer Carries', 3, 40, 7),
+        ('Single-leg RDL', 3, 8, 7.5),
     ]
 }
 
