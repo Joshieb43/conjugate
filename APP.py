@@ -1,8 +1,8 @@
 import streamlit as st
 
-st.set_page_config(page_title="Conjugate Weight Picker", page_icon="purple_ape.svg", layout="centered")
+st.set_page_config(page_title="Conjugate Weight Suggestion Tool", page_icon="purple_ape.svg", layout="centered")
 
-st.title("🏋️ Conjugate Weight Picker")
+st.title("🦧 Conjugate Weight Suggestion Tool")
 st.caption("Enter your maxes, pick the DE day + wave, and get your bar weight automatically.")
 
 # --- Styling: purple background and adjusted text color ---
@@ -27,7 +27,7 @@ st.markdown(
 )
 
 # change the visible heading emoji to match icon style
-st.title("🦧 Conjugate Weight Picker")
+st.title("Conjugate Weight Picker")
 
 # ---- Helpers ----
 def round_to_increment(x: float, inc: float) -> float:
@@ -51,11 +51,11 @@ st.subheader("1) Enter your maxes (lb)")
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    bench_max = st.number_input("Bench max (or training max)", min_value=0.0, value=305.0, step=5.0)
+    bench_max = st.number_input("Bench max (or training max)", min_value=0.0, value=135.0, step=5.0)
 with c2:
-    squat_max = st.number_input("Squat max (or training max)", min_value=0.0, value=495.0, step=5.0)
+    squat_max = st.number_input("Squat max (or training max)", min_value=0.0, value=225.0, step=5.0)
 with c3:
-    deadlift_max = st.number_input("Deadlift max (or training max)", min_value=0.0, value=565.0, step=5.0)
+    deadlift_max = st.number_input("Deadlift max (or training max)", min_value=0.0, value=315.0, step=5.0)
 
 st.subheader("2) Pick your day + wave")
 day = st.selectbox(
