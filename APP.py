@@ -47,6 +47,30 @@ DEFAULTS = {
     "DE Lower (Speed Deadlift)": "6–10 x 1 (fast pulls)",
 }
 
+# Common conjugate accessories with suggested sets, reps and RPE
+ACCESSORY_DEFAULTS = {
+    'Upper': [
+        ('Close-grip Bench', 3, 6, 8),
+        ('Incline Dumbbell Press', 3, 8, 7.5),
+        ('Pendlay Row', 4, 6, 8),
+        ('Face Pulls', 3, 15, 7),
+        ('Tricep Pressdown', 3, 10, 7),
+    ],
+    'Lower': [
+        ('Romanian Deadlift', 3, 6, 8),
+        ('Reverse Lunges', 3, 8, 7.5),
+        ('GHR / Hamstring Curl', 3, 8, 8),
+        ('Back Extensions', 3, 12, 7),
+        ('Ab Wheel / Plank', 3, 30, 7),
+    ],
+    'Deadlift': [
+        ('Deficit Deadlift', 3, 3, 8),
+        ('Rack Pulls', 3, 5, 8),
+        ('Bent-over Row', 4, 6, 8),
+        ('Hamstring Curl', 3, 10, 7),
+    ]
+}
+
 st.subheader("1) Enter your maxes (lb)")
 c1, c2, c3 = st.columns(3)
 
@@ -215,6 +239,36 @@ else:
 
 st.subheader("Suggested sets × reps")
 st.write(DEFAULTS.get(day, {}))
+
+# --- Accessories Section ---
+st.subheader("Accessories")
+# pick accessory pool based on day
+if 'Bench' in day or 'Upper' in day:
+    pool_key = 'Upper'
+elif 'Deadlift' in day:
+    pool_key = 'Deadlift'
+else:
+    pool_key = 'Lower'
+
+options = [a[0] for a in ACCESSORY_DEFAULTS.get(pool_key, [])]
+chosen = st.multiselect("Choose accessories", options=options, default=options[:3])
+
+if chosen:
+    st.write("Customize sets / reps / RPE for selected accessories:")
+    for name in chosen:
+        # find defaults
+        default = next((t for t in ACCESSORY_DEFAULTS[pool_key] if t[0] == name), None)
+        d_sets, d_reps, d_rpe = (default[1], default[2], default[3]) if default else (3, 8, 7.5)
+        c1, c2, c3 = st.columns([1,1,1])
+        with c1:
+            sets = st.number_input(f"{name} sets", min_value=1, max_value=10, value=d_sets, key=f"{name}-sets")
+        with c2:
+            reps = st.number_input(f"{name} reps", min_value=1, max_value=30, value=d_reps, key=f"{name}-reps")
+        with c3:
+            rpe = st.slider(f"{name} RPE", min_value=6.0, max_value=10.0, value=float(d_rpe), step=0.5, key=f"{name}-rpe")
+        st.write(f"• {name}: {sets} x {reps} @ RPE {rpe}")
+else:
+    st.write("No accessories selected. Use the pick list to add common accessories for this day.")
 
 st.divider()
 
