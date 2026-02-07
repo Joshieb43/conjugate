@@ -79,12 +79,46 @@ ACCESSORY_DEFAULTS = {
         ('Rack Pulls', 3, 5, 8),
         ('Bent-over Row', 4, 6, 8),
         ('Hamstring Curl', 3, 10, 7),
+        ('Back Extensions', 3, 12, 7),
         ('Block Pulls', 3, 3, 8),
         ('Kettlebell Swings', 3, 12, 7),
         ('Glute Bridge', 3, 8, 7.5),
         ('Farmer Carries', 3, 40, 7),
         ('Single-leg RDL', 3, 8, 7.5),
     ]
+}
+
+# Optional video links (we'll provide YouTube search links if no direct video provided)
+ACCESSORY_VIDEOS = {
+    'Back Extensions': '',
+    'Close-grip Bench': '',
+    'Incline Dumbbell Press': '',
+    'Pendlay Row': '',
+    'Face Pulls': '',
+    'Tricep Pressdown': '',
+    'Overhead Press': '',
+    'Lat Pulldown': '',
+    'Dumbbell Row': '',
+    'Banded Push-ups': '',
+    'Hammer Curl': '',
+    'Romanian Deadlift': '',
+    'Reverse Lunges': '',
+    'GHR / Hamstring Curl': '',
+    'Ab Wheel / Plank': '',
+    'Front Squat (variations)': '',
+    'Goblet Squat': '',
+    'Leg Press': '',
+    'Calf Raises': '',
+    'Hip Thrust': '',
+    'Deficit Deadlift': '',
+    'Rack Pulls': '',
+    'Bent-over Row': '',
+    'Hamstring Curl': '',
+    'Block Pulls': '',
+    'Kettlebell Swings': '',
+    'Glute Bridge': '',
+    'Farmer Carries': '',
+    'Single-leg RDL': '',
 }
 
 st.subheader("1) Enter your maxes (lb)")
@@ -269,6 +303,12 @@ else:
 # Layout: accessories on left, RPE chart on right
 left_col, right_col = st.columns([2, 1])
 
+# Beginner-friendly option: show how-to video links
+if 'show_videos' not in st.session_state:
+    st.session_state['show_videos'] = True
+show_videos = st.checkbox("Show how-to video links for accessories (beginner friendly)", value=st.session_state['show_videos'])
+st.session_state['show_videos'] = show_videos
+
 with left_col:
     options = [a[0] for a in ACCESSORY_DEFAULTS.get(pool_key, [])]
     chosen = st.multiselect("Choose accessories", options=options, default=options[:3])
@@ -287,6 +327,16 @@ with left_col:
             with c3:
                 rpe = st.slider(f"{name} RPE", min_value=6.0, max_value=10.0, value=float(d_rpe), step=0.5, key=f"{name}-rpe")
             st.write(f"• {name}: {sets} x {reps} @ RPE {rpe}")
+            # show beginner video link if user wants
+            if st.session_state.get('show_videos', True):
+                vid = ACCESSORY_VIDEOS.get(name, '')
+                if vid:
+                    st.markdown(f"[Watch how to: {name}]({vid})")
+                else:
+                    # fallback to YouTube search link
+                    query = name.replace(' ', '+')
+                    search_url = f"https://www.youtube.com/results?search_query={query}+exercise+technique"
+                    st.markdown(f"[Search videos for: {name}]({search_url})")
     else:
         st.write("No accessories selected. Use the pick list to add common accessories for this day.")
 
@@ -304,6 +354,19 @@ with right_col:
         st.image(str(found), caption="RPE Chart", use_column_width=True)
     else:
         st.write("RPE chart not found. Save the provided image as 'rpe_chart.png' next to this script.")
+
+# Quick starter videos and links for beginners
+with st.expander("Beginner: Quick starter videos and links", expanded=False):
+    st.markdown("**Suggested starter links**")
+    links = {
+        'How to warm up (search)': 'https://www.youtube.com/results?search_query=warm+up+for+strength+training',
+        'Understanding RPE (search)': 'https://www.youtube.com/results?search_query=RPE+scale+explanation',
+        'How to squat (search)': 'https://www.youtube.com/results?search_query=how+to+squat+technique',
+        'How to bench press (search)': 'https://www.youtube.com/results?search_query=how+to+bench+press+technique',
+        'How to deadlift (search)': 'https://www.youtube.com/results?search_query=how+to+deadlift+technique',
+    }
+    for label, url in links.items():
+        st.markdown(f"- [{label}]({url})")
 
 st.divider()
 
