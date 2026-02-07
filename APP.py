@@ -1,11 +1,20 @@
 import streamlit as st
 from pathlib import Path
+import base64
+import os
 
 st.set_page_config(page_title="Conjugate Weight Suggestion Tool", page_icon="purple_ape.svg", layout="centered")
 
-st.title("🦧 Conjugate Weight Suggestion Tool")
-st.caption("Enter your maxes, pick the DE day + wave, and get your bar weight automatically.")
+col1, col2 = st.columns([3, 1])  # adjust ratio as needed
 
+with col1:
+    st.title("Conjugate Weight Suggestion Tool")
+
+with col2:
+    st.image("gorilla.png", width=120)
+st.caption("Enter your maxes, pick the DE day + wave, and get your bar weight automatically.")
+st.markdown("This app is a practical tool to help you quickly determine your working weights for Westside-style conjugate training days. It provides suggested warmup progressions, accommodates optional band/chain resistance, and offers accessory exercise ideas. Perfect for lifters who want to spend less time calculating and more time lifting! (Note: the app provides estimates based on typical percentage guidelines; adjust as needed based on your experience and how you feel on a given day.)")
+st.markdown("Developed by [Josh B]. Source code available on [GitHub](https://github.com/Joshieb43/). For feedback or suggestions, feel free to reach out!")
 # --- Styling: purple background and adjusted text color ---
 st.markdown(
         """
@@ -73,6 +82,12 @@ ACCESSORY_DEFAULTS = {
         ('Leg Press', 3, 10, 7),
         ('Calf Raises', 4, 12, 7),
         ('Hip Thrust', 3, 8, 8),
+        # Ab finishers
+        ('Hanging Leg Raise', 3, 10, 7),
+        ('Ab Wheel', 3, 10, 7.5),
+        ('Plank', 3, 60, 7),
+        ('Cable Crunch', 3, 12, 7),
+        ('Russian Twist', 3, 20, 7),
     ],
     'Deadlift': [
         ('Deficit Deadlift', 3, 3, 8),
@@ -173,6 +188,49 @@ if use_bands:
     st.caption("The app will subtract this from your target 'total at top' to estimate bar weight.")
 
 st.divider()
+
+# --- Decorative collage in side spaces (optional) ---
+show_collage = st.checkbox("Show side collage (decorative)", value=False)
+if show_collage:
+    collage_dir = Path(__file__).parent / 'collage'
+    if not collage_dir.exists():
+        try:
+            collage_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+    # collect images
+    exts = ('.png', '.jpg', '.jpeg', '.svg', '.gif')
+    files = [p for p in sorted(collage_dir.iterdir()) if p.suffix.lower() in exts]
+    if not files:
+        st.info("No collage images found. Save images (png/jpg/svg) into the 'collage' folder next to APP.py to use the collage.")
+    else:
+        img_size = st.slider('Collage image width (px)', min_value=60, max_value=180, value=100)
+        img_opacity = st.slider('Collage opacity', min_value=0.1, max_value=1.0, value=0.9)
+
+        left_imgs = files[0::2]
+        right_imgs = files[1::2]
+
+        def to_data_uri(path: Path):
+            b = path.read_bytes()
+            typ = 'svg+xml' if path.suffix.lower() == '.svg' else path.suffix.lower().lstrip('.')
+            b64 = base64.b64encode(b).decode('utf-8')
+            return f"data:image/{typ};base64,{b64}"
+
+        left_html = ''.join([f'<img src="{to_data_uri(p)}" style="width:{img_size}px;border-radius:8px;margin:6px;opacity:{img_opacity};"/>' for p in left_imgs])
+        right_html = ''.join([f'<img src="{to_data_uri(p)}" style="width:{img_size}px;border-radius:8px;margin:6px;opacity:{img_opacity};"/>' for p in right_imgs])
+
+        collage_html = f"""
+        <style>
+        #left-collage, #right-collage {{position:fixed; top:80px; bottom:40px; width:{img_size+24}px; overflow:auto; display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; z-index:9999;}}
+        #left-collage {{left:6px}}
+        #right-collage {{right:6px}}
+        @media print {{ #left-collage, #right-collage {{ display:none }} }}
+        </style>
+        <div id="left-collage">{left_html}</div>
+        <div id="right-collage">{right_html}</div>
+        """
+
+        st.markdown(collage_html, unsafe_allow_html=True)
 
 # ---- Compute ----
 def compute_base_for_day(day_name):
@@ -311,7 +369,20 @@ st.session_state['show_videos'] = show_videos
 
 with left_col:
     options = [a[0] for a in ACCESSORY_DEFAULTS.get(pool_key, [])]
-    chosen = st.multiselect("Choose accessories", options=options, default=options[:3])
+    # on lower days offer an option to include ab finishers by default
+    include_ab_finishers = False
+    if pool_key == 'Lower':
+        include_ab_finishers = st.checkbox('Include ab finishers (recommended for lower days)', value=True)
+    # default selection: first 3 items; if include_ab_finishers, expand defaults to include common finishers
+    default_sel = options[:3]
+    if pool_key == 'Lower' and include_ab_finishers:
+        # try to include ab finishers by name
+        ab_names = ['Hanging Leg Raise', 'Ab Wheel', 'Plank', 'Ab Wheel / Plank']
+        for n in options:
+            if n in ab_names and n not in default_sel:
+                default_sel.append(n)
+
+    chosen = st.multiselect("Choose accessories", options=options, default=default_sel)
 
     if chosen:
         st.write("Customize sets / reps / RPE for selected accessories:")
