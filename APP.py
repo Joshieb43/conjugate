@@ -189,7 +189,29 @@ else:
     # fallback
     if not me_pcts_parsed:
         me_pcts_parsed = [0.30, 0.45, 0.60, 0.75, 0.88]
-    show_me_warmups(base, rounding, me_pcts=me_pcts_parsed)
+
+    # determine top percentage based on user choice
+    # sensible defaults: 1RM ~95%, 3RM ~92%, 5RM ~90%
+    top_pct = 0.95
+    top_desc = None
+    try:
+        if me_top_choice == "3RM":
+            top_pct = 0.92
+            top_desc = "work up to a heavy triple"
+        elif me_top_choice == "5RM":
+            top_pct = 0.90
+            top_desc = "work up to a heavy 5RM"
+        elif me_top_choice == "Custom %" and me_custom_pct:
+            top_pct = float(me_custom_pct) / 100.0
+            top_desc = f"custom target ({int(float(me_custom_pct))}%)"
+        else:
+            top_pct = 0.95
+            top_desc = "work up to a heavy single"
+    except Exception:
+        top_pct = 0.95
+        top_desc = "work up to a heavy single"
+
+    show_me_warmups(base, rounding, me_pcts=me_pcts_parsed, top_pct=top_pct, top_desc=top_desc)
 
 st.subheader("Suggested sets × reps")
 st.write(DEFAULTS.get(day, {}))
