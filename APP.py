@@ -277,11 +277,18 @@ with left_col:
 
 with right_col:
     # load RPE chart relative to this script
-    img_path = Path(__file__).parent / 'rpe_chart.svg'
-    if img_path.exists():
-        st.image(str(img_path), caption="RPE Chart", use_column_width=True)
+    base = Path(__file__).parent
+    # prefer common raster image if user saved the provided image
+    candidates = [base / 'rpe_chart.png', base / 'rpe_chart.jpg', base / 'rpe_chart.jpeg', base / 'rpe_chart.svg']
+    found = None
+    for p in candidates:
+        if p.exists():
+            found = p
+            break
+    if found:
+        st.image(str(found), caption="RPE Chart", use_column_width=True)
     else:
-        st.write("RPE chart not found.")
+        st.write("RPE chart not found. Save the provided image as 'rpe_chart.png' next to this script.")
 
 st.divider()
 
