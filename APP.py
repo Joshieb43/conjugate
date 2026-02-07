@@ -82,6 +82,14 @@ with st.expander("Customize warmup percentages (optional)"):
     me_pcts_text = st.text_input("ME warmup percentages (comma-separated %, e.g. 30,45,60,75,88)", value="")
     de_pcts_text = st.text_input("DE warmup percentages (comma-separated %, e.g. 30,45)", value="")
 
+# If ME day is chosen, allow choosing target rep (1/3/5) or custom top percentage
+me_top_choice = None
+me_custom_pct = None
+if day.startswith("ME"):
+    me_top_choice = st.selectbox("ME target", ["1RM (single)", "3RM", "5RM", "Custom %"])
+    if me_top_choice == "Custom %":
+        me_custom_pct = st.number_input("Custom top % of 1RM (e.g. 90 for 90%)", min_value=50.0, max_value=100.0, value=95.0, step=0.5)
+
 
 st.subheader("3) Optional accommodating resistance")
 use_bands = st.toggle("I’m using bands/chains (estimate top weight)")
@@ -114,7 +122,7 @@ def parse_pct_list(text, default_list):
         return default_list
 
 
-def show_me_warmups(base, rounding, me_pcts=None):
+def show_me_warmups(base, rounding, me_pcts=None, top_pct=0.95, top_desc=None):
     # adjusted warmup percentages for ME days
     default = [0.30, 0.45, 0.60, 0.75, 0.88]
     warmup_pcts = me_pcts or default
@@ -124,13 +132,13 @@ def show_me_warmups(base, rounding, me_pcts=None):
         w = round_to_increment(base * p, rounding)
         reps = reps_map.get(p, 3 if p >= 0.5 else 5)
         warmups.append((int(p * 100), reps, w))
-    top_pct = 0.95
     top_w = round_to_increment(base * top_pct, rounding)
     # display
     st.subheader("Warmup progression (ME)")
     for pct, reps, w in warmups:
         st.write(f"{pct}% x {reps}: {w:.1f} lb")
-    st.write(f"Top work suggestion: {int(top_pct*100)}% -> {top_w:.1f} lb (work up to a heavy single)")
+    desc = top_desc or ("work up to a heavy single" if abs(top_pct-0.95)<0.01 else f"work up to target ({int(top_pct*100)}% of 1RM)")
+    st.write(f"Top work suggestion: {int(top_pct*100)}% -> {top_w:.1f} lb ({desc})")
 
 
 # determine base
