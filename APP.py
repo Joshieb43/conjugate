@@ -184,7 +184,7 @@ else:
     show_me_warmups(base, rounding, me_pcts=me_pcts_parsed)
 
 st.subheader("Suggested sets × reps")
-st.write(DEFAULTS[day])
+st.write(DEFAULTS.get(day, {}))
 
 st.divider()
 
