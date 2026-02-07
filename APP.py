@@ -1,4 +1,5 @@
 import streamlit as st
+from pathlib import Path
 
 st.set_page_config(page_title="Conjugate Weight Suggestion Tool", page_icon="purple_ape.svg", layout="centered")
 
@@ -250,25 +251,37 @@ elif 'Deadlift' in day:
 else:
     pool_key = 'Lower'
 
-options = [a[0] for a in ACCESSORY_DEFAULTS.get(pool_key, [])]
-chosen = st.multiselect("Choose accessories", options=options, default=options[:3])
+# Layout: accessories on left, RPE chart on right
+left_col, right_col = st.columns([2, 1])
 
-if chosen:
-    st.write("Customize sets / reps / RPE for selected accessories:")
-    for name in chosen:
-        # find defaults
-        default = next((t for t in ACCESSORY_DEFAULTS[pool_key] if t[0] == name), None)
-        d_sets, d_reps, d_rpe = (default[1], default[2], default[3]) if default else (3, 8, 7.5)
-        c1, c2, c3 = st.columns([1,1,1])
-        with c1:
-            sets = st.number_input(f"{name} sets", min_value=1, max_value=10, value=d_sets, key=f"{name}-sets")
-        with c2:
-            reps = st.number_input(f"{name} reps", min_value=1, max_value=30, value=d_reps, key=f"{name}-reps")
-        with c3:
-            rpe = st.slider(f"{name} RPE", min_value=6.0, max_value=10.0, value=float(d_rpe), step=0.5, key=f"{name}-rpe")
-        st.write(f"• {name}: {sets} x {reps} @ RPE {rpe}")
-else:
-    st.write("No accessories selected. Use the pick list to add common accessories for this day.")
+with left_col:
+    options = [a[0] for a in ACCESSORY_DEFAULTS.get(pool_key, [])]
+    chosen = st.multiselect("Choose accessories", options=options, default=options[:3])
+
+    if chosen:
+        st.write("Customize sets / reps / RPE for selected accessories:")
+        for name in chosen:
+            # find defaults
+            default = next((t for t in ACCESSORY_DEFAULTS[pool_key] if t[0] == name), None)
+            d_sets, d_reps, d_rpe = (default[1], default[2], default[3]) if default else (3, 8, 7.5)
+            c1, c2, c3 = st.columns([1,1,1])
+            with c1:
+                sets = st.number_input(f"{name} sets", min_value=1, max_value=10, value=d_sets, key=f"{name}-sets")
+            with c2:
+                reps = st.number_input(f"{name} reps", min_value=1, max_value=30, value=d_reps, key=f"{name}-reps")
+            with c3:
+                rpe = st.slider(f"{name} RPE", min_value=6.0, max_value=10.0, value=float(d_rpe), step=0.5, key=f"{name}-rpe")
+            st.write(f"• {name}: {sets} x {reps} @ RPE {rpe}")
+    else:
+        st.write("No accessories selected. Use the pick list to add common accessories for this day.")
+
+with right_col:
+    # load RPE chart relative to this script
+    img_path = Path(__file__).parent / 'rpe_chart.svg'
+    if img_path.exists():
+        st.image(str(img_path), caption="RPE Chart", use_column_width=True)
+    else:
+        st.write("RPE chart not found.")
 
 st.divider()
 
