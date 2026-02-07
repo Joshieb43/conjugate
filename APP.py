@@ -136,6 +136,22 @@ ACCESSORY_VIDEOS = {
     'Single-leg RDL': '',
 }
 
+# Recommended accessory RPE guidance for ME vs DE days
+ACCESSORY_RPE_GUIDANCE = {
+    'ME': [
+        ('General', 'Use moderate-to-challenging RPE for assistance (~7–8). Prioritize technique and muscle building.'),
+        ('Heavy complementary work', 'For heavy accessory sets (e.g., front squat, heavy rows) use RPE 8–9 for low reps (3–6).'),
+        ('Volume work', 'For hypertrophy-style assistance use RPE 7–8 for 3–4 sets of 8–12.'),
+        ('Finishers', 'Core finishers may be at RPE ~7 (timed or rep-based).')
+    ],
+    'DE': [
+        ('General', 'Keep accessory RPE lower on DE days to prioritize speed and recovery (~6–7).'),
+        ('Speed/technique', 'Use RPE 6–7 on speed-focused accessory work; focus on acceleration and bar path.'),
+        ('Light volume', 'Higher rep, lower RPE volume (RPE 6–7) is suitable for technique and conditioning.'),
+        ('Finishers', 'Maintain moderate RPE (~7) for timed finishers; avoid near-max efforts.')
+    ]
+}
+
 st.subheader("1) Enter your maxes (lb)")
 c1, c2, c3 = st.columns(3)
 
@@ -350,6 +366,13 @@ st.write(DEFAULTS.get(day, {}))
 
 # --- Accessories Section ---
 st.subheader("Accessories")
+# RPE guidance toggle
+show_rpe_guidance = st.checkbox("Show recommended accessory RPE guidance for this day", value=True)
+if show_rpe_guidance:
+    guidance_key = 'ME' if day.startswith('ME') else 'DE'
+    st.markdown("**Recommended accessory RPEs**")
+    for title, text in ACCESSORY_RPE_GUIDANCE.get(guidance_key, []):
+        st.write(f"**{title}:** {text}")
 # pick accessory pool based on day
 if 'Bench' in day or 'Upper' in day:
     pool_key = 'Upper'
@@ -408,6 +431,12 @@ with left_col:
                     query = name.replace(' ', '+')
                     search_url = f"https://www.youtube.com/results?search_query={query}+exercise+technique"
                     st.markdown(f"[Search videos for: {name}]({search_url})")
+            # show quick RPE hint per selected accessory (based on day type)
+            if show_rpe_guidance:
+                if day.startswith('ME'):
+                    st.caption('Suggested accessory RPE: ~7–8 (adjust for heavy assistance to 8–9)')
+                else:
+                    st.caption('Suggested accessory RPE: ~6–7 (keep light and explosive)')
     else:
         st.write("No accessories selected. Use the pick list to add common accessories for this day.")
 
