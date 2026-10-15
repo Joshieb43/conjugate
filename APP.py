@@ -3,12 +3,12 @@ from pathlib import Path
 import base64
 import os
 
-st.set_page_config(page_title="Conjugate Weight Suggestion Tool 2.0", page_icon="purple_ape.svg", layout="centered")
+st.set_page_config(page_title="Conjugate Weight Suggestions Tool 2.0", page_icon="purple_ape.svg", layout="centered")
 
 col1, col2 = st.columns([3, 1])  # adjust ratio as needed
 
 with col1:
-    st.title("Conjugate Weight Suggestion Tool")
+    st.title("Conjugate Weight Suggestion Tool 2.0")
 
 with col2:
     st.image("gorilla.png", width=120)
