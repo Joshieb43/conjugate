@@ -14,7 +14,7 @@ import streamlit as st
 
 
 ROOT = Path(__file__).resolve().parent
-st.set_page_config(page_title="Conjugate Day | Workout Dashboard", page_icon="🏋️", layout="wide")
+st.set_page_config(page_title="Conjugate Training Tool", page_icon="🏋️", layout="wide")
 
 st.markdown(
     """
@@ -145,7 +145,7 @@ if "logs" not in st.session_state:
 # HEADER
 header_text, header_image = st.columns([5, 1], vertical_alignment="center")
 with header_text:
-    st.title("🏋️ CONJUGATE DAY")
+    st.title("🏋️ Conjugate Training Tool")
     st.caption("Your training day at a glance · Developed by Josh B")
 with header_image:
     gorilla = ROOT / "gorilla.png"
