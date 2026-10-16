@@ -335,18 +335,18 @@ def rest_timer(default_seconds: int, autostart: bool) -> None:
     buttons = "".join(f'<button onclick="go({s})">{s // 60}:{s % 60:02d}</button>' for s in options)
     components.html(
         f"""
-        <div style="font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif;color:#171a20;background:#f4f4f4;
+        <div style="font-family:sans-serif;color:#f5f2ff;background:#332348;border:1px solid #5c417e;
                     border-radius:12px;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-          <span style="font-size:13px;color:#5c5e62;font-weight:500">Rest</span>
+          <span style="font-size:13px;color:#d2c1e7;font-weight:500">Rest</span>
           <span id="t" style="font-size:28px;font-weight:600;min-width:84px;font-variant-numeric:tabular-nums">0:00</span>
           <span>{buttons}<button class="stop" onclick="stop()">Stop</button></span>
         </div>
         <style>
           body{{margin:0}}
-          button{{font-family:inherit;font-size:13px;font-weight:500;background:#fff;color:#171a20;border:0;
-                 border-radius:6px;padding:7px 11px;margin:2px;cursor:pointer;box-shadow:0 0 0 1px #e2e3e3 inset}}
-          button:hover{{background:#eeeeee}}
-          button.stop{{color:#5c5e62}}
+          button{{font-family:inherit;font-size:13px;font-weight:500;background:#4a3266;color:#fff;border:0;
+                 border-radius:6px;padding:7px 11px;margin:2px;cursor:pointer;box-shadow:0 0 0 1px #7a5aa3 inset}}
+          button:hover{{background:#5b3e7d}}
+          button.stop{{color:#d2c1e7}}
         </style>
         <script>
           let end = 0, iv = null;
@@ -355,10 +355,10 @@ def rest_timer(default_seconds: int, autostart: bool) -> None:
           function tick() {{
             const left = Math.max(0, Math.round((end - Date.now()) / 1000));
             show(left);
-            if (left === 0) {{ clearInterval(iv); iv = null; el.style.color = "#3e6ae1";
+            if (left === 0) {{ clearInterval(iv); iv = null; el.style.color = "#7dffb0";
               try {{ navigator.vibrate && navigator.vibrate([200, 100, 200]); }} catch (e) {{}} }}
           }}
-          function go(s) {{ end = Date.now() + s * 1000; el.style.color = "#171a20";
+          function go(s) {{ end = Date.now() + s * 1000; el.style.color = "#f5f2ff";
             if (iv) clearInterval(iv); iv = setInterval(tick, 250); tick(); }}
           function stop() {{ if (iv) clearInterval(iv); iv = null; show(0); }}
           {"go(" + str(default_seconds) + ");" if autostart else "show(" + str(default_seconds) + ");"}
@@ -384,58 +384,45 @@ st.set_page_config(page_title="Conjugate Training Tool", page_icon="🏋️", la
 st.markdown(
     """
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-      /* Base: white page, near-black text, one blue accent */
-      :root {--ink:#171a20; --muted:#5c5e62; --faint:#8e8e8e; --line:#e2e3e3; --card:#f4f4f4; --accent:#3e6ae1;}
-      html, body, .stApp, [class*="st-"], button, input, textarea, select {font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif}
-      .stApp {background:#ffffff; color:var(--ink)}
-      header[data-testid="stHeader"] {background:transparent; height:0}
+      /* Purple theme (matches the original app) */
+      :root {--ink:#f5f2ff; --muted:#d2c1e7; --faint:#a993c6; --line:#5c417e; --card:#332348; --accent:#7740ba;}
+      .stApp {background:linear-gradient(155deg,#1b122d 0%,#28183f 55%,#161322 100%); color:var(--ink)}
+      header[data-testid="stHeader"] {background:transparent}
       div[data-testid="stDecoration"] {display:none}
-      .block-container {max-width:1180px; padding-top:0.5rem; padding-bottom:4rem}
-      h1, h2, h3, h4 {color:var(--ink); font-weight:500; letter-spacing:-0.01em}
-      h3 {font-size:1.15rem}
-      p, label, .stMarkdown {color:var(--ink)}
-      div[data-testid="stCaptionContainer"], .stCaption {color:var(--muted)}
+      .block-container {max-width:1220px; padding-top:0.75rem; padding-bottom:4rem}
+      h1, h2, h3, h4 {color:#faf5ff}
+      div[data-testid="stCaptionContainer"] p {color:var(--muted)}
 
       /* Top bar */
       .topbar {display:flex; align-items:center; justify-content:space-between; padding:14px 4px 6px}
-      .wordmark {font-size:15px; font-weight:700; letter-spacing:0.32em; text-transform:uppercase; color:var(--ink)}
+      .wordmark {font-size:15px; font-weight:700; letter-spacing:0.32em; text-transform:uppercase; color:#faf5ff}
       .topbar .status {font-size:12px; color:var(--faint)}
 
-      /* Tabs become a centered, sticky text menu */
-      div[data-testid="stTabs"] > div:first-child {position:sticky; top:0; z-index:50; background:rgba(255,255,255,0.92);
+      /* Tabs as a menu bar that stays at the top */
+      div[data-testid="stTabs"] > div:first-child {position:sticky; top:0; z-index:50; background:rgba(27,18,45,0.92);
         backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-bottom:1px solid var(--line); margin-bottom:1.25rem}
-      div[data-baseweb="tab-list"] {justify-content:center; gap:4px; padding:6px 0}
-      button[data-baseweb="tab"] {background:transparent; border-radius:6px; padding:8px 14px; height:auto}
-      button[data-baseweb="tab"] p {font-size:14px; font-weight:500; color:var(--ink)}
-      button[data-baseweb="tab"]:hover {background:rgba(0,0,0,0.05)}
-      button[data-baseweb="tab"][aria-selected="true"] {background:rgba(0,0,0,0.06)}
+      div[data-baseweb="tab-list"] {gap:4px; padding:6px 0}
+      button[data-baseweb="tab"] {background:transparent; border-radius:8px; padding:8px 14px; height:auto}
+      button[data-baseweb="tab"] p {font-size:15px; font-weight:500; color:var(--muted)}
+      button[data-baseweb="tab"]:hover {background:rgba(255,255,255,0.06)}
+      button[data-baseweb="tab"][aria-selected="true"] {background:var(--card)}
+      button[data-baseweb="tab"][aria-selected="true"] p {color:#ffffff}
       div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {display:none}
 
       /* Cards */
-      div[data-testid="stMetric"] {background:var(--card); border:0; border-radius:12px; padding:16px 18px}
-      div[data-testid="stMetricLabel"] p {color:var(--muted); font-size:13px; font-weight:500}
-      div[data-testid="stMetricValue"] {color:var(--ink); font-weight:600; font-size:1.7rem}
-      details[data-testid="stExpander"] {border:1px solid var(--line); border-radius:12px; background:#fff}
-      div[data-testid="stAlert"] {border-radius:10px}
+      div[data-testid="stMetric"] {border:1px solid var(--line); background:var(--card); border-radius:14px; padding:12px 16px}
+      div[data-testid="stMetricValue"] {color:#f7f0ff}
+      div[data-testid="stMetricLabel"] p {color:var(--muted)}
+      details[data-testid="stExpander"] {border:1px solid var(--line); border-radius:12px}
 
-      /* Buttons: flat, rounded, blue primary */
-      .stButton > button, .stDownloadButton > button {border-radius:6px; font-weight:500; border:0;
-        background:var(--card); color:var(--ink); box-shadow:none; min-height:42px}
-      .stButton > button:hover, .stDownloadButton > button:hover {background:#e8e8e8; color:var(--ink)}
-      .stButton > button[kind="primary"] {background:var(--accent); color:#fff}
-      .stButton > button[kind="primary"]:hover {background:#3457b1; color:#fff}
-
-      /* Inputs: soft gray fields, no heavy borders */
-      div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-baseweb="base-input"] {background:var(--card); border-color:transparent; border-radius:6px}
-
-      hr {border-color:var(--line)}
+      /* Buttons */
+      .stButton > button[kind="primary"] {background:var(--accent); color:#fff; border-color:#9863d7}
+      .stButton > button[kind="primary"]:hover {background:#8a52cf; border-color:#a978e0; color:#fff}
 
       @media (max-width: 640px) {
-        .block-container {padding-left:.9rem; padding-right:.9rem}
-        div[data-testid="stMetricValue"] {font-size:1.3rem}
-        div[data-baseweb="tab-list"] {justify-content:flex-start; overflow-x:auto}
+        .block-container {padding-left:.8rem; padding-right:.8rem}
+        div[data-testid="stMetricValue"] {font-size:1.35rem}
+        div[data-baseweb="tab-list"] {overflow-x:auto}
         button[data-baseweb="tab"] {padding:8px 10px}
         .topbar .status {display:none}
       }
@@ -608,7 +595,7 @@ with tab_today:
                 reps = 10 if p < 0.4 else 5 if p < 0.55 else 3 if p < 0.70 else 2 if p < 0.85 else 1
             w = round_weight(base_max * p, rounding)
             st.write(f"**{fmt(p * 100)}%** · {fmt(w)} {unit} × {reps}  \n"
-                     f"<span style='color:#8e8e8e;font-size:.85em'>{plate_text(w, ucfg, unit)}</span>",
+                     f"<span style='color:#b9a6d6;font-size:.85em'>{plate_text(w, ucfg, unit)}</span>",
                      unsafe_allow_html=True)
         if not is_de:
             st.caption("Then take progressively heavier singles or triples up to your top set.")
