@@ -1,475 +1,366 @@
-import streamlit as st
+"""Conjugate Day — single-page workout dashboard.
+
+Drop-in replacement for the original APP.py. Requires only Streamlit.
+Workout logs live in session state, with CSV export/import for portability.
+"""
+
+import csv
+import io
+from datetime import datetime, timezone
 from pathlib import Path
-import base64
-import os
+from urllib.parse import quote_plus
 
-st.set_page_config(page_title="Conjugate Weight Suggestions Tool 2.0", page_icon="purple_ape.svg", layout="centered")
+import streamlit as st
 
-col1, col2 = st.columns([3, 1])  # adjust ratio as needed
 
-with col1:
-    st.title("Conjugate Weight Suggestion Tool 2.0")
+ROOT = Path(__file__).resolve().parent
+st.set_page_config(page_title="Conjugate Day | Workout Dashboard", page_icon="🏋️", layout="wide")
 
-with col2:
-    st.image("gorilla.png", width=120)
-st.caption("Enter your maxes, pick the DE day + wave, and get your bar weight automatically.")
-st.markdown("This app is a practical tool to help you quickly determine your working weights for Westside-style conjugate training days. It provides suggested warmup progressions, accommodates optional band/chain resistance, and offers accessory exercise ideas. Perfect for lifters who want to spend less time calculating and more time lifting! (Note: the app provides estimates based on typical percentage guidelines; adjust as needed based on your experience and how you feel on a given day.)")
-st.markdown("Developed by [Josh B]. Source code available on [GitHub](https://github.com/Joshieb43/). For feedback or suggestions, feel free to reach out!")
-# --- Styling: purple background and adjusted text color ---
 st.markdown(
-        """
-        <style>
-        .stApp {
-            background: linear-gradient(180deg, #6a0dad 0%, #4b0082 100%);
-            color: #fff;
-        }
-        .stMarkdown, .stText, .css-1v3fvcr {
-            color: #fff;
-        }
-        .stButton>button {
-            background-color: #7b1fa2;
-            color: white;
-        }
-        .stMetricValue, .stMetricLabel { color: #fff; }
-        </style>
-        """,
-        unsafe_allow_html=True,
+    """
+    <style>
+      .stApp {background:linear-gradient(155deg,#1b122d 0%,#28183f 55%,#161322 100%);color:#f5f2ff}
+      .block-container {max-width:1220px;padding-top:1.25rem;padding-bottom:3rem}
+      div[data-testid="stMetric"] {border:1px solid #5c417e;background:#332348;border-radius:14px;padding:12px 16px}
+      div[data-testid="stMetricValue"] {color:#f7f0ff}
+      div[data-testid="stMetricLabel"] {color:#d2c1e7}
+      .stButton>button[kind="primary"] {background:#7740ba;color:white;border-color:#9863d7}
+      h1,h2,h3 {color:#faf5ff}
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-# change the visible heading emoji to match icon style
-st.title("Conjugate Weight Picker")
 
-# ---- Helpers ----
-def round_to_increment(x: float, inc: float) -> float:
-    return round(x / inc) * inc
-
-def clamp(x: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, x))
-
-# Typical Westside-style waves (common starting point)
-DE_UPPER_WAVE = {1: 0.50, 2: 0.55, 3: 0.60}  # of training max
-DE_LOWER_WAVE = {1: 0.50, 2: 0.55, 3: 0.60}  # many run similar; adjust as desired
-
-# Suggested set/rep defaults (you can change later)
-DEFAULTS = {
-    "DE Upper (Speed Bench)": "8–10 x 3 (short rests, fast reps)",
-    "DE Lower (Speed Squat)": "8–12 x 2 (fast reps)",
-    "DE Lower (Speed Deadlift)": "6–10 x 1 (fast pulls)",
-}
-
-# Common conjugate accessories with suggested sets, reps and RPE
+# Original accessory library, including default sets/reps/RPE.
 ACCESSORY_DEFAULTS = {
-    'Upper': [
-        ('Close-grip Bench', 3, 6, 8),
-        ('Incline Dumbbell Press', 3, 8, 7.5),
-        ('Pendlay Row', 4, 6, 8),
-        ('Face Pulls', 3, 15, 7),
-        ('Tricep Pressdown', 3, 10, 7),
-        ('Overhead Press', 3, 5, 8),
-        ('Lat Pulldown', 3, 8, 7.5),
-        ('Dumbbell Row', 4, 8, 8),
-        ('Banded Push-ups', 3, 10, 7),
-        ('Hammer Curl', 3, 10, 7),
+    "Upper": [
+        ("Close-grip Bench", 3, 6, 8),
+        ("Incline Dumbbell Press", 3, 8, 7.5),
+        ("Pendlay Row", 4, 6, 8),
+        ("Face Pulls", 3, 15, 7),
+        ("Tricep Pressdown", 3, 10, 7),
+        ("Overhead Press", 3, 5, 8),
+        ("Lat Pulldown", 3, 8, 7.5),
+        ("Dumbbell Row", 4, 8, 8),
+        ("Banded Push-ups", 3, 10, 7),
+        ("Hammer Curl", 3, 10, 7),
     ],
-    'Lower': [
-        ('Romanian Deadlift', 3, 6, 8),
-        ('Reverse Lunges', 3, 8, 7.5),
-        ('GHR / Hamstring Curl', 3, 8, 8),
-        ('Back Extensions', 3, 12, 7),
-        ('Ab Wheel / Plank', 3, 30, 7),
-        ('Front Squat (variations)', 3, 5, 8),
-        ('Goblet Squat', 3, 8, 7.5),
-        ('Leg Press', 3, 10, 7),
-        ('Calf Raises', 4, 12, 7),
-        ('Hip Thrust', 3, 8, 8),
-        # Ab finishers
-        ('Hanging Leg Raise', 3, 10, 7),
-        ('Ab Wheel', 3, 10, 7.5),
-        ('Plank', 3, 60, 7),
-        ('Cable Crunch', 3, 12, 7),
-        ('Russian Twist', 3, 20, 7),
+    "Lower": [
+        ("Romanian Deadlift", 3, 6, 8),
+        ("Reverse Lunges", 3, 8, 7.5),
+        ("GHR / Hamstring Curl", 3, 8, 8),
+        ("Back Extensions", 3, 12, 7),
+        ("Ab Wheel / Plank", 3, 30, 7),
+        ("Front Squat (variations)", 3, 5, 8),
+        ("Goblet Squat", 3, 8, 7.5),
+        ("Leg Press", 3, 10, 7),
+        ("Calf Raises", 4, 12, 7),
+        ("Hip Thrust", 3, 8, 8),
+        ("Hanging Leg Raise", 3, 10, 7),
+        ("Ab Wheel", 3, 10, 7.5),
+        ("Plank", 3, 60, 7),
+        ("Cable Crunch", 3, 12, 7),
+        ("Russian Twist", 3, 20, 7),
     ],
-    'Deadlift': [
-        ('Deficit Deadlift', 3, 3, 8),
-        ('Rack Pulls', 3, 5, 8),
-        ('Bent-over Row', 4, 6, 8),
-        ('Hamstring Curl', 3, 10, 7),
-        ('Back Extensions', 3, 12, 7),
-        ('Block Pulls', 3, 3, 8),
-        ('Kettlebell Swings', 3, 12, 7),
-        ('Glute Bridge', 3, 8, 7.5),
-        ('Farmer Carries', 3, 40, 7),
-        ('Single-leg RDL', 3, 8, 7.5),
-    ]
+    "Deadlift": [
+        ("Deficit Deadlift", 3, 3, 8),
+        ("Rack Pulls", 3, 5, 8),
+        ("Bent-over Row", 4, 6, 8),
+        ("Hamstring Curl", 3, 10, 7),
+        ("Back Extensions", 3, 12, 7),
+        ("Block Pulls", 3, 3, 8),
+        ("Kettlebell Swings", 3, 12, 7),
+        ("Glute Bridge", 3, 8, 7.5),
+        ("Farmer Carries", 3, 40, 7),
+        ("Single-leg RDL", 3, 8, 7.5),
+    ],
 }
 
-# Optional video links (we'll provide YouTube search links if no direct video provided)
-ACCESSORY_VIDEOS = {
-    'Back Extensions': '',
-    'Close-grip Bench': '',
-    'Incline Dumbbell Press': '',
-    'Pendlay Row': '',
-    'Face Pulls': '',
-    'Tricep Pressdown': '',
-    'Overhead Press': '',
-    'Lat Pulldown': '',
-    'Dumbbell Row': '',
-    'Banded Push-ups': '',
-    'Hammer Curl': '',
-    'Romanian Deadlift': '',
-    'Reverse Lunges': '',
-    'GHR / Hamstring Curl': '',
-    'Ab Wheel / Plank': '',
-    'Front Squat (variations)': '',
-    'Goblet Squat': '',
-    'Leg Press': '',
-    'Calf Raises': '',
-    'Hip Thrust': '',
-    'Deficit Deadlift': '',
-    'Rack Pulls': '',
-    'Bent-over Row': '',
-    'Hamstring Curl': '',
-    'Block Pulls': '',
-    'Kettlebell Swings': '',
-    'Glute Bridge': '',
-    'Farmer Carries': '',
-    'Single-leg RDL': '',
+DAY_TYPES = ["DE Upper", "ME Upper", "DE Lower", "ME Lower"]
+WAVE_DEFAULTS = {1: 50.0, 2: 55.0, 3: 60.0}
+LOG_COLUMNS = ["timestamp_utc", "day", "exercise", "weight_lb", "reps", "rpe", "wave_week"]
+ME_VARIATIONS = {
+    "Upper": ["Competition Bench", "Close-grip Bench", "Floor Press", "Board Press", "Incline Bench", "Pin Press", "Custom"],
+    "Lower": ["Competition Squat", "Box Squat", "Front Squat", "Safety-bar Squat", "Competition Deadlift", "Deficit Deadlift", "Rack Pull", "Custom"],
 }
 
-# Recommended accessory RPE guidance for ME vs DE days
-ACCESSORY_RPE_GUIDANCE = {
-    'ME': [
-        ('General', 'Use moderate-to-challenging RPE for assistance (~7–8). Prioritize technique and muscle building.'),
-        ('Heavy complementary work', 'For heavy accessory sets (e.g., front squat, heavy rows) use RPE 8–9 for low reps (3–6).'),
-        ('Volume work', 'For hypertrophy-style assistance use RPE 7–8 for 3–4 sets of 8–12.'),
-        ('Finishers', 'Core finishers may be at RPE ~7 (timed or rep-based).')
-    ],
-    'DE': [
-        ('General', 'Keep accessory RPE lower on DE days to prioritize speed and recovery (~6–7).'),
-        ('Speed/technique', 'Use RPE 6–7 on speed-focused accessory work; focus on acceleration and bar path.'),
-        ('Light volume', 'Higher rep, lower RPE volume (RPE 6–7) is suitable for technique and conditioning.'),
-        ('Finishers', 'Maintain moderate RPE (~7) for timed finishers; avoid near-max efforts.')
-    ]
-}
 
-st.subheader("1) Enter your maxes (lb)")
-c1, c2, c3 = st.columns(3)
-
-with c1:
-    bench_max = st.number_input("Bench max (or training max)", min_value=0.0, value=135.0, step=5.0)
-with c2:
-    squat_max = st.number_input("Squat max (or training max)", min_value=0.0, value=225.0, step=5.0)
-with c3:
-    deadlift_max = st.number_input("Deadlift max (or training max)", min_value=0.0, value=315.0, step=5.0)
-
-st.subheader("2) Pick your day + wave")
-day = st.selectbox(
-    "Day",
-    [
-        "ME Upper (Bench)",
-        "DE Upper (Speed Bench)",
-        "ME Lower (Squat)",
-        "DE Lower (Speed Squat)",
-        "ME Lower (Deadlift)",
-        "DE Lower (Speed Deadlift)",
-    ],
-)
-
-week = st.radio("Wave week", [1, 2, 3], horizontal=True)
-
-rounding = st.selectbox("Round bar weight to nearest", [2.5, 5.0, 10.0], index=1)
-
-# Optional: show/hide warmups and allow custom percentages
-show_warmups = st.checkbox("Show warmups", value=True)
-
-with st.expander("Customize warmup percentages (optional)"):
-    st.write("Leave blank to use defaults.")
-    me_pcts_text = st.text_input("ME warmup percentages (comma-separated %, e.g. 30,45,60,75,88)", value="")
-    de_pcts_text = st.text_input("DE warmup percentages (comma-separated %, e.g. 30,45)", value="")
-
-# If ME day is chosen, allow choosing target rep (1/3/5) or custom top percentage
-me_top_choice = None
-me_custom_pct = None
-if day.startswith("ME"):
-    me_top_choice = st.selectbox("ME target", ["1RM (single)", "3RM", "5RM", "Custom %"])
-    if me_top_choice == "Custom %":
-        me_custom_pct = st.number_input("Custom top % of 1RM (e.g. 90 for 90%)", min_value=50.0, max_value=100.0, value=95.0, step=0.5)
+def round_weight(value: float, increment: float) -> float:
+    """Round to the selected plate increment, never below zero."""
+    return max(0.0, round(value / increment) * increment)
 
 
-st.subheader("3) Optional accommodating resistance")
-use_bands = st.toggle("I’m using bands/chains (estimate top weight)")
-band_top = 0.0
-if use_bands:
-    band_top = st.number_input("Estimated band/chain weight at the TOP (lb)", min_value=0.0, value=0.0, step=5.0)
-    st.caption("The app will subtract this from your target 'total at top' to estimate bar weight.")
-
-st.divider()
-
-# --- Decorative collage in side spaces (optional) ---
-show_collage = st.checkbox("Show side collage (decorative)", value=False)
-if show_collage:
-    collage_dir = Path(__file__).parent / 'collage'
-    if not collage_dir.exists():
-        try:
-            collage_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-    # collect images
-    exts = ('.png', '.jpg', '.jpeg', '.svg', '.gif')
-    files = [p for p in sorted(collage_dir.iterdir()) if p.suffix.lower() in exts]
-    if not files:
-        st.info("No collage images found. Save images (png/jpg/svg) into the 'collage' folder next to APP.py to use the collage.")
-    else:
-        img_size = st.slider('Collage image width (px)', min_value=60, max_value=180, value=100)
-        img_opacity = st.slider('Collage opacity', min_value=0.1, max_value=1.0, value=0.9)
-
-        left_imgs = files[0::2]
-        right_imgs = files[1::2]
-
-        def to_data_uri(path: Path):
-            b = path.read_bytes()
-            typ = 'svg+xml' if path.suffix.lower() == '.svg' else path.suffix.lower().lstrip('.')
-            b64 = base64.b64encode(b).decode('utf-8')
-            return f"data:image/{typ};base64,{b64}"
-
-        left_html = ''.join([f'<img src="{to_data_uri(p)}" style="width:{img_size}px;border-radius:8px;margin:6px;opacity:{img_opacity};"/>' for p in left_imgs])
-        right_html = ''.join([f'<img src="{to_data_uri(p)}" style="width:{img_size}px;border-radius:8px;margin:6px;opacity:{img_opacity};"/>' for p in right_imgs])
-
-        collage_html = f"""
-        <style>
-        #left-collage, #right-collage {{position:fixed; top:80px; bottom:40px; width:{img_size+24}px; overflow:auto; display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; z-index:9999;}}
-        #left-collage {{left:6px}}
-        #right-collage {{right:6px}}
-        @media print {{ #left-collage, #right-collage {{ display:none }} }}
-        </style>
-        <div id="left-collage">{left_html}</div>
-        <div id="right-collage">{right_html}</div>
-        """
-
-        st.markdown(collage_html, unsafe_allow_html=True)
-
-# ---- Compute ----
-def compute_base_for_day(day_name):
-    if "Bench" in day_name:
-        return bench_max
-    if "Deadlift" in day_name:
-        return deadlift_max
-    return squat_max
-
-
-def parse_pct_list(text, default_list):
-    if not text or not text.strip():
-        return default_list
+def parse_percentages(raw: str, defaults: list[float]) -> list[float]:
+    """Parse comma-separated percentages, as fractions between zero and one."""
+    if not raw.strip():
+        return defaults
     try:
-        parts = [float(p.strip()) for p in text.split(',') if p.strip()]
-        parts = [p / 100.0 for p in parts if 0 < p < 100]
-        if not parts:
-            return default_list
-        return parts
-    except Exception:
-        return default_list
+        parsed = [float(part.strip()) / 100 for part in raw.split(",") if part.strip()]
+        if parsed and all(0 < p < 1 for p in parsed):
+            return parsed
+    except ValueError:
+        pass
+    st.warning("Invalid warmup percentages. Using the defaults instead.")
+    return defaults
 
 
-def show_me_warmups(base, rounding, me_pcts=None, top_pct=0.95, top_desc=None):
-    # adjusted warmup percentages for ME days
-    default = [0.30, 0.45, 0.60, 0.75, 0.88]
-    warmup_pcts = me_pcts or default
-    reps_map = {0.30: 10, 0.45: 5, 0.60: 3, 0.75: 2, 0.88: 1}
-    warmups = []
-    for p in warmup_pcts:
-        w = round_to_increment(base * p, rounding)
-        reps = reps_map.get(p, 3 if p >= 0.5 else 5)
-        warmups.append((int(p * 100), reps, w))
-    top_w = round_to_increment(base * top_pct, rounding)
-    # display
-    st.subheader("Warmup progression (ME)")
-    for pct, reps, w in warmups:
-        st.write(f"{pct}% x {reps}: {w:.1f} lb")
-    desc = top_desc or ("work up to a heavy single" if abs(top_pct-0.95)<0.01 else f"work up to target ({int(top_pct*100)}% of 1RM)")
-    st.write(f"Top work suggestion: {int(top_pct*100)}% -> {top_w:.1f} lb ({desc})")
+def load_csv(file) -> list[dict]:
+    """Validate a previously exported workout log before adding to the session."""
+    reader = csv.DictReader(io.StringIO(file.getvalue().decode("utf-8-sig")))
+    if not set(LOG_COLUMNS).issubset(reader.fieldnames or []):
+        raise ValueError("CSV is missing the expected workout-log columns.")
+    rows = []
+    for row in reader:
+        weight = float(row["weight_lb"])
+        reps = int(row["reps"])
+        rpe = float(row["rpe"])
+        if not (0 <= weight <= 5000 and 1 <= reps <= 100 and 1 <= rpe <= 10):
+            raise ValueError("Workout log has weights, reps or RPE values out of range.")
+        rows.append({
+            "timestamp_utc": row["timestamp_utc"][:40],
+            "day": row["day"][:60],
+            "exercise": row["exercise"][:120],
+            "weight_lb": weight,
+            "reps": reps,
+            "rpe": rpe,
+            "wave_week": row["wave_week"][:20],
+        })
+        if len(rows) > 10000:
+            raise ValueError("The import limit is 10,000 sets.")
+    return rows
 
 
-# determine base
-base = compute_base_for_day(day)
+def csv_bytes(rows: list[dict]) -> bytes:
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=LOG_COLUMNS)
+    writer.writeheader()
+    writer.writerows([{col: row.get(col, "") for col in LOG_COLUMNS} for row in rows])
+    return output.getvalue().encode("utf-8-sig")
 
-if day.startswith("DE"):
-    # keep existing DE behavior
-    if "Bench" in day:
-        pct = DE_UPPER_WAVE[week]
-    else:
-        pct = DE_LOWER_WAVE[week]
 
-    target_total = base * pct
-    # If bands/chains: estimate bar = target_total - top tension
-    bar_est = target_total - band_top
-    bar_est = clamp(bar_est, 0, 10_000)
-    bar_final = round_to_increment(bar_est, rounding)
+if "logs" not in st.session_state:
+    st.session_state.logs = []
 
-    st.metric("Target %", f"{int(pct*100)}%")
-    st.metric("Target total load (approx)", f"{round(target_total, 1)} lb")
+# HEADER
+header_text, header_image = st.columns([5, 1], vertical_alignment="center")
+with header_text:
+    st.title("🏋️ CONJUGATE DAY")
+    st.caption("Your training day at a glance · Developed by Josh B")
+with header_image:
+    gorilla = ROOT / "gorilla.png"
+    if gorilla.exists():
+        st.image(str(gorilla), width=105)
 
-    if use_bands:
-        st.metric("Estimated BAR weight to load", f"{bar_final:.1f} lb")
-        st.caption("Note: band/chain tension varies a lot. This is a practical estimate, not physics-accurate.")
-    else:
-        st.metric("BAR weight to load", f"{bar_final:.1f} lb")
+# ROW 1 — CONTROLS
+st.subheader("Build today's workout")
+day_col, week_col = st.columns([2, 1])
+with day_col:
+    day = st.radio("Training day", DAY_TYPES, horizontal=True, key="training_day")
+with week_col:
+    week = st.radio("DE wave", [1, 2, 3], horizontal=True, disabled=day.startswith("ME"))
 
-    # show light warmups for DE days (user can customize)
-    st.subheader("Suggested warmups (DE)")
-    de_default = [0.30, 0.45]
-    de_pcts = parse_pct_list(de_pcts_text, [p*100 for p in de_default])
-    # parse_pct_list returns fractions if provided previously; ensure fractions
-    if all(p > 1 for p in de_pcts):
-        de_pcts = [p/100.0 for p in de_pcts]
-    if not de_pcts:
-        de_pcts = de_default
-    for p in de_pcts:
-        st.write(f"{int(p*100)}% x {10 if p<0.4 else 5}: {round_to_increment(base*p, rounding):.1f} lb")
+upper = "Upper" in day
+is_de = day.startswith("DE")
+movement_family = "Upper" if upper else "Lower"
 
+if upper:
+    lift_family = "Bench"
+elif is_de:
+    lift_family = st.selectbox("Speed movement", ["Squat", "Deadlift"], horizontal=False)
 else:
-    # ME day: show warmups and top-work suggestion
-    # allow custom ME percentages
-    me_pct_defaults = [30,45,60,75,88]
-    me_pcts_parsed = parse_pct_list(me_pcts_text, me_pct_defaults)
-    # normalize to fractions
-    if all(p > 1 for p in me_pcts_parsed):
-        me_pcts_parsed = [p/100.0 for p in me_pcts_parsed]
-    # fallback
-    if not me_pcts_parsed:
-        me_pcts_parsed = [0.30, 0.45, 0.60, 0.75, 0.88]
+    lift_family = None  # ME lower determined from exercise selection below.
 
-    # determine top percentage based on user choice
-    # sensible defaults: 1RM ~95%, 3RM ~92%, 5RM ~90%
-    top_pct = 0.95
-    top_desc = None
-    try:
-        if me_top_choice == "3RM":
-            top_pct = 0.92
-            top_desc = "work up to a heavy triple"
-        elif me_top_choice == "5RM":
-            top_pct = 0.90
-            top_desc = "work up to a heavy 5RM"
-        elif me_top_choice == "Custom %" and me_custom_pct:
-            top_pct = float(me_custom_pct) / 100.0
-            top_desc = f"custom target ({int(float(me_custom_pct))}%)"
+if not is_de:
+    variations = ME_VARIATIONS[movement_family]
+    variation = st.selectbox("Today's max-effort variation", variations)
+    exercise = st.text_input("Custom movement name", value="Custom ME variation", max_chars=100) if variation == "Custom" else variation
+    if not upper:
+        lift_family = "Deadlift" if any(word in exercise.lower() for word in ["deadlift", "rack pull", "block pull"]) else "Squat"
+else:
+    exercise = {"Bench": "Speed Bench Press", "Squat": "Speed Squat", "Deadlift": "Speed Deadlift"}[lift_family]
+
+st.caption("Set your training maxes (lb)")
+mx1, mx2, mx3 = st.columns(3)
+with mx1:
+    bench_max = st.number_input("Bench", min_value=0.0, value=135.0, step=5.0, key="bench_tm")
+with mx2:
+    squat_max = st.number_input("Squat", min_value=0.0, value=225.0, step=5.0, key="squat_tm")
+with mx3:
+    deadlift_max = st.number_input("Deadlift", min_value=0.0, value=315.0, step=5.0, key="deadlift_tm")
+
+with st.expander("⚙️ Advanced calculator settings"):
+    rounding = st.selectbox("Round bar weight to nearest (lb)", [2.5, 5.0, 10.0], index=1)
+    st.caption("The starting maxes are examples, not your actual maxes. Inputs last for this active browser session.")
+    custom_me_warmups = st.text_input("ME warmups (%)", placeholder="30,45,60,75,88")
+    custom_de_warmups = st.text_input("DE warmups (%)", placeholder="30,45")
+
+# Calculate against the selected lift family.
+max_for_family = {"Bench": bench_max, "Squat": squat_max, "Deadlift": deadlift_max}[lift_family]
+
+if is_de:
+    p1, p2 = st.columns([1, 1])
+    with p1:
+        wave_pct = st.number_input("Speed work percentage (%)", min_value=1.0, max_value=100.0,
+                                   value=WAVE_DEFAULTS[week], step=2.5, key=f"wave_{week}")
+    with p2:
+        band_top = st.number_input("Bands/chains at lockout (lb)", min_value=0.0,
+                                   value=0.0, step=5.0, help="Estimated additional resistance at the top.")
+    top_pct = wave_pct / 100
+    target_total = max_for_family * top_pct
+    bar_weight = round_weight(max(0.0, target_total - band_top), rounding)
+    prescription = {"Bench": "8–10 × 3", "Squat": "8–12 × 2", "Deadlift": "6–10 × 1"}[lift_family]
+    target_reps = {"Bench": 3, "Squat": 2, "Deadlift": 1}[lift_family]
+    main_note = "Fast, controlled reps. Short rests; lower load if bar speed drops."
+else:
+    me1, me2 = st.columns([1, 1])
+    with me1:
+        me_target = st.selectbox("Top-set target", ["Heavy single", "Heavy triple", "Heavy 5", "Custom %"])
+    top_frac = {"Heavy single": .95, "Heavy triple": .92, "Heavy 5": .90}.get(me_target, .95)
+    with me2:
+        if me_target == "Custom %":
+            top_frac = st.number_input("Top-set % of training max", min_value=50.0, max_value=100.0,
+                                       value=95.0, step=.5) / 100
         else:
-            top_pct = 0.95
-            top_desc = "work up to a heavy single"
-    except Exception:
-        top_pct = 0.95
-        top_desc = "work up to a heavy single"
+            st.caption("ME loads are rough starting estimates, not guaranteed rep maxes.")
+    target_reps = {"Heavy single": 1, "Heavy triple": 3, "Heavy 5": 5}.get(me_target, 1)
+    top_pct = top_frac
+    target_total = max_for_family * top_pct
+    bar_weight = round_weight(target_total, rounding)
+    band_top = 0.0
+    prescription = f"Work up to {target_reps} rep{'s' if target_reps != 1 else ''}"
+    main_note = "A different variation may have a different true max; adjust by RPE."
 
-    show_me_warmups(base, rounding, me_pcts=me_pcts_parsed, top_pct=top_pct, top_desc=top_desc)
+# ROW 2 — HERO METRICS
+st.markdown(f"### {exercise}")
+a, b, c, d = st.columns(4)
+with a:
+    st.metric("Load plates for", f"{bar_weight:g} lb")
+with b:
+    st.metric("Sets × reps", prescription)
+with c:
+    st.metric("Target %", f"{top_pct * 100:g}%")
+with d:
+    st.metric("Total at top (est.)", f"{target_total:g} lb")
+st.caption(main_note)
+if is_de and band_top:
+    st.caption(f"Estimated {band_top:g} lb bands/chains at lockout; actual tension varies.")
 
-st.subheader("Suggested sets × reps")
-st.write(DEFAULTS.get(day, {}))
+# ROW 3 — WARMUPS AND ACCESSORIES
+warmup_col, accessories_col = st.columns([1, 1.5], gap="large")
+with warmup_col:
+    st.subheader("Warmup progression")
+    default_pcts = [.30, .45] if is_de else [.30, .45, .60, .75, .88]
+    pcts = parse_percentages(custom_de_warmups if is_de else custom_me_warmups, default_pcts)
+    for index, p in enumerate(pcts):
+        suggested_reps = (10 if p < .4 else 5) if is_de else (10 if p < .4 else 5 if p < .55 else 3 if p < .70 else 2 if p < .85 else 1)
+        weight = round_weight(max_for_family * p, rounding)
+        st.write(f"**{p * 100:g}%** · {weight:g} lb × {suggested_reps}")
+    if not is_de:
+        st.caption("Finish with progressively heavier singles/triples as appropriate before your top set.")
 
-# --- Accessories Section ---
-st.subheader("Accessories")
-# RPE guidance toggle
-show_rpe_guidance = st.checkbox("Show recommended accessory RPE guidance for this day", value=True)
-if show_rpe_guidance:
-    guidance_key = 'ME' if day.startswith('ME') else 'DE'
-    st.markdown("**Recommended accessory RPEs**")
-    for title, text in ACCESSORY_RPE_GUIDANCE.get(guidance_key, []):
-        st.write(f"**{title}:** {text}")
-# pick accessory pool based on day
-if 'Bench' in day or 'Upper' in day:
-    pool_key = 'Upper'
-elif 'Deadlift' in day:
-    pool_key = 'Deadlift'
-else:
-    pool_key = 'Lower'
-
-# Layout: accessories on left, RPE chart on right
-left_col, right_col = st.columns([2, 1])
-
-# Beginner-friendly option: show how-to video links
-if 'show_videos' not in st.session_state:
-    st.session_state['show_videos'] = True
-show_videos = st.checkbox("Show how-to video links for accessories (beginner friendly)", value=st.session_state['show_videos'])
-st.session_state['show_videos'] = show_videos
-
-with left_col:
-    options = [a[0] for a in ACCESSORY_DEFAULTS.get(pool_key, [])]
-    # on lower days offer an option to include ab finishers by default
-    include_ab_finishers = False
-    if pool_key == 'Lower':
-        include_ab_finishers = st.checkbox('Include ab finishers (recommended for lower days)', value=True)
-    # default selection: first 3 items; if include_ab_finishers, expand defaults to include common finishers
-    default_sel = options[:3]
-    if pool_key == 'Lower' and include_ab_finishers:
-        # try to include ab finishers by name
-        ab_names = ['Hanging Leg Raise', 'Ab Wheel', 'Plank', 'Ab Wheel / Plank']
-        for n in options:
-            if n in ab_names and n not in default_sel:
-                default_sel.append(n)
-
-    chosen = st.multiselect("Choose accessories", options=options, default=default_sel)
-
-    if chosen:
-        st.write("Customize sets / reps / RPE for selected accessories:")
-        for name in chosen:
-            # find defaults
-            default = next((t for t in ACCESSORY_DEFAULTS[pool_key] if t[0] == name), None)
-            d_sets, d_reps, d_rpe = (default[1], default[2], default[3]) if default else (3, 8, 7.5)
-            c1, c2, c3 = st.columns([1,1,1])
-            with c1:
-                sets = st.number_input(f"{name} sets", min_value=1, max_value=10, value=d_sets, key=f"{name}-sets")
-            with c2:
-                reps = st.number_input(f"{name} reps", min_value=1, max_value=30, value=d_reps, key=f"{name}-reps")
-            with c3:
-                rpe = st.slider(f"{name} RPE", min_value=6.0, max_value=10.0, value=float(d_rpe), step=0.5, key=f"{name}-rpe")
-            st.write(f"• {name}: {sets} x {reps} @ RPE {rpe}")
-            # show beginner video link if user wants
-            if st.session_state.get('show_videos', True):
-                vid = ACCESSORY_VIDEOS.get(name, '')
-                if vid:
-                    st.markdown(f"[Watch how to: {name}]({vid})")
-                else:
-                    # fallback to YouTube search link
-                    query = name.replace(' ', '+')
-                    search_url = f"https://www.youtube.com/results?search_query={query}+exercise+technique"
-                    st.markdown(f"[Search videos for: {name}]({search_url})")
-            # show quick RPE hint per selected accessory (based on day type)
-            if show_rpe_guidance:
-                if day.startswith('ME'):
-                    st.caption('Suggested accessory RPE: ~7–8 (adjust for heavy assistance to 8–9)')
-                else:
-                    st.caption('Suggested accessory RPE: ~6–7 (keep light and explosive)')
+with accessories_col:
+    st.subheader("Suggested accessories")
+    pool_key = "Upper" if upper else ("Deadlift" if lift_family == "Deadlift" else "Lower")
+    options = [entry[0] for entry in ACCESSORY_DEFAULTS[pool_key]]
+    initial = options[:3]
+    if pool_key == "Lower":
+        initial.append("Hanging Leg Raise")
+    # day-specific key retains different accessory choices for each day.
+    chosen = st.multiselect("Exercises", options=options, default=initial, key=f"accessories_{day}_{pool_key}")
+    accessory_plan = []
+    for name in chosen:
+        _, s, r, suggested_rpe = next(item for item in ACCESSORY_DEFAULTS[pool_key] if item[0] == name)
+        day_rpe = suggested_rpe if not is_de else min(suggested_rpe, 7.0)
+        # Read edited widget values when available; use the pool defaults otherwise.
+        s = st.session_state.get(f"sets_{day}_{name}", s)
+        r = st.session_state.get(f"reps_{day}_{name}", r)
+        day_rpe = st.session_state.get(f"rpe_{day}_{name}", day_rpe)
+        accessory_plan.append((name, s, r, day_rpe))
+    if accessory_plan:
+        for name, s, r, rpe in accessory_plan:
+            st.write(f"**{name}** — {s} × {r} · RPE {rpe:g}")
     else:
-        st.write("No accessories selected. Use the pick list to add common accessories for this day.")
+        st.caption("Choose exercises to add to your session.")
 
-with right_col:
-    # load RPE chart relative to this script
-    base = Path(__file__).parent
-    # prefer common raster image if user saved the provided image
-    candidates = [base / 'rpe_chart.png', base / 'rpe_chart.jpg', base / 'rpe_chart.jpeg', base / 'rpe_chart.svg']
-    found = None
-    for p in candidates:
-        if p.exists():
-            found = p
-            break
-    if found:
-        st.image(str(found), caption="RPE Chart", use_column_width=True)
-    else:
-        st.write("RPE chart not found. Save the provided image as 'rpe_chart.png' next to this script.")
+    with st.expander("Edit accessory targets / watch technique demos"):
+        st.caption("ME accessory work: generally RPE 7–8; DE: generally 6–7. Tailor by recovery.")
+        for name, suggested_sets, suggested_reps, suggested_rpe in accessory_plan:
+            st.markdown(f"**{name}**")
+            ax, ay, az = st.columns(3)
+            with ax:
+                sets = st.number_input("Sets", min_value=1, max_value=10, value=suggested_sets, key=f"sets_{day}_{name}")
+            with ay:
+                reps = st.number_input("Reps", min_value=1, max_value=100, value=suggested_reps, key=f"reps_{day}_{name}")
+            with az:
+                rpe = st.number_input("RPE", min_value=1.0, max_value=10.0, value=float(suggested_rpe), step=.5, key=f"rpe_{day}_{name}")
+            st.caption(f"Plan: {sets} × {reps} @ RPE {rpe:g}  ·  [Technique videos](https://www.youtube.com/results?search_query={quote_plus(name + ' exercise technique')})")
 
-# Quick starter videos and links for beginners
-with st.expander("Beginner: Quick starter videos and links", expanded=False):
-    st.markdown("**Suggested starter links**")
-    links = {
-        'How to warm up (search)': 'https://www.youtube.com/results?search_query=warm+up+for+strength+training',
-        'Understanding RPE (search)': 'https://www.youtube.com/results?search_query=RPE+scale+explanation',
-        'How to squat (search)': 'https://www.youtube.com/results?search_query=how+to+squat+technique',
-        'How to bench press (search)': 'https://www.youtube.com/results?search_query=how+to+bench+press+technique',
-        'How to deadlift (search)': 'https://www.youtube.com/results?search_query=how+to+deadlift+technique',
-    }
-    for label, url in links.items():
-        st.markdown(f"- [{label}]({url})")
-
+# ROW 4 — LOG SETS AND PR
 st.divider()
+log_col, records_col = st.columns([1, 1.4], gap="large")
+with log_col:
+    st.subheader("Log a completed set")
+    log_exercise = st.selectbox("Exercise logged", [exercise] + [name for name in chosen if name != exercise])
+    w1, w2, w3 = st.columns(3)
+    with w1:
+        logged_weight = st.number_input("Weight (lb)", min_value=0.0, value=float(bar_weight) if log_exercise == exercise else 0.0, step=2.5, key=f"log_weight_{log_exercise}")
+    with w2:
+        logged_reps = st.number_input("Reps", min_value=1, max_value=100, value=target_reps if log_exercise == exercise else 8, step=1, key=f"log_reps_{log_exercise}")
+    with w3:
+        logged_rpe = st.number_input("RPE", min_value=1.0, max_value=10.0, value=8.0, step=.5, key=f"log_rpe_{log_exercise}")
+    if st.button("+ Log set", type="primary", use_container_width=True):
+        st.session_state.logs.append({
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "day": day,
+            "exercise": log_exercise,
+            "weight_lb": logged_weight,
+            "reps": logged_reps,
+            "rpe": logged_rpe,
+            "wave_week": str(week) if is_de else "",
+        })
+        st.success("Set added to today's session log.")
 
-with st.expander("Customize the percentages (optional)"):
-    st.write("If you want different waves, adjust these in the code:")
-    st.code("DE_UPPER_WAVE = {1: 0.50, 2: 0.55, 3: 0.60}\nDE_LOWER_WAVE = {1: 0.50, 2: 0.55, 3: 0.60}")
+with records_col:
+    st.subheader("Session history & PR")
+    matches = [r for r in st.session_state.logs if r["exercise"] == log_exercise]
+    if matches:
+        best = max(matches, key=lambda r: (float(r["weight_lb"]), int(r["reps"])))
+        st.metric(f"Best logged {log_exercise} weight", f"{float(best['weight_lb']):g} lb × {int(best['reps'])}")
+        st.caption("Heaviest recorded set (not an estimated 1RM).")
+    else:
+        st.caption("Log a set to begin tracking your best performance for each movement.")
+    if st.session_state.logs:
+        st.dataframe(list(reversed(st.session_state.logs[-20:])), use_container_width=True, hide_index=True)
+        st.download_button("⬇ Export workout history (CSV)", data=csv_bytes(st.session_state.logs),
+                           file_name="conjugate_workout_log.csv", mime="text/csv", use_container_width=True)
+        if st.button("Undo last set", use_container_width=True):
+            st.session_state.logs.pop()
+            st.rerun()
+    else:
+        st.info("No sets logged in this browser session yet.")
+    with st.expander("Restore a previous CSV log"):
+        history_file = st.file_uploader("Select a previously exported workout log", type=["csv"])
+        if history_file and st.button("Import workout log"):
+            try:
+                incoming = load_csv(history_file)
+                st.session_state.logs.extend(incoming)
+                st.success(f"Imported {len(incoming)} sets.")
+                st.rerun()
+            except (ValueError, UnicodeDecodeError, TypeError) as exc:
+                st.error(f"Could not import CSV: {exc}")
+
+with st.expander("RPE chart, exercise links & optional collage"):
+    chart = next((ROOT / candidate for candidate in ["rpe_chart.png", "rpe_chart.jpg", "rpe_chart.jpeg", "rpe_chart.svg"] if (ROOT / candidate).exists()), None)
+    if chart:
+        st.image(str(chart), caption="Original RPE chart", width=520)
+    else:
+        st.caption("Add rpe_chart.png alongside APP.py to display your RPE chart.")
+    st.markdown("[Understanding RPE](https://www.youtube.com/results?search_query=RPE+scale+explained) · [Bench technique](https://www.youtube.com/results?search_query=bench+press+technique) · [Squat technique](https://www.youtube.com/results?search_query=squat+technique) · [Deadlift technique](https://www.youtube.com/results?search_query=deadlift+technique)")
+    collage = ROOT / "collage"
+    if collage.is_dir():
+        pictures = [p for p in sorted(collage.iterdir()) if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg"}]
+        if pictures and st.checkbox("Show original collage photos", value=False):
+            st.image([str(p) for p in pictures[:12]], width=150)
+
+st.caption("Training suggestions are estimates. Your log lives in this browser session only: export CSV before closing/restarting. For permanent cross-device history, a database and user accounts are needed.  ·  [Source on GitHub](https://github.com/Joshieb43/)")
