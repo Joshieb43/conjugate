@@ -12,6 +12,7 @@ Requirements: streamlit, pandas. For Google Sheets sync also install
 st-gsheets-connection and add a [connections.gsheets] block to secrets.
 """
 
+import base64
 import csv
 import io
 from datetime import datetime, timezone
@@ -334,14 +335,19 @@ def rest_timer(default_seconds: int, autostart: bool) -> None:
     buttons = "".join(f'<button onclick="go({s})">{s // 60}:{s % 60:02d}</button>' for s in options)
     components.html(
         f"""
-        <div style="font-family:sans-serif;color:#f5f2ff;background:#332348;border:1px solid #5c417e;
-                    border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span style="font-size:13px;color:#d2c1e7">Rest</span>
-          <span id="t" style="font-size:28px;font-weight:700;min-width:84px">0:00</span>
-          <span>{buttons}<button onclick="stop()">Stop</button></span>
+        <div style="font-family:Inter,-apple-system,'Segoe UI',Roboto,sans-serif;color:#171a20;background:#f4f4f4;
+                    border-radius:12px;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <span style="font-size:13px;color:#5c5e62;font-weight:500">Rest</span>
+          <span id="t" style="font-size:28px;font-weight:600;min-width:84px;font-variant-numeric:tabular-nums">0:00</span>
+          <span>{buttons}<button class="stop" onclick="stop()">Stop</button></span>
         </div>
-        <style>button{{background:#4a3266;color:#fff;border:1px solid #7a5aa3;border-radius:8px;
-                       padding:6px 9px;margin:2px;cursor:pointer}}</style>
+        <style>
+          body{{margin:0}}
+          button{{font-family:inherit;font-size:13px;font-weight:500;background:#fff;color:#171a20;border:0;
+                 border-radius:6px;padding:7px 11px;margin:2px;cursor:pointer;box-shadow:0 0 0 1px #e2e3e3 inset}}
+          button:hover{{background:#eeeeee}}
+          button.stop{{color:#5c5e62}}
+        </style>
         <script>
           let end = 0, iv = null;
           const el = document.getElementById("t");
@@ -349,10 +355,10 @@ def rest_timer(default_seconds: int, autostart: bool) -> None:
           function tick() {{
             const left = Math.max(0, Math.round((end - Date.now()) / 1000));
             show(left);
-            if (left === 0) {{ clearInterval(iv); iv = null; el.style.color = "#7dffb0";
+            if (left === 0) {{ clearInterval(iv); iv = null; el.style.color = "#3e6ae1";
               try {{ navigator.vibrate && navigator.vibrate([200, 100, 200]); }} catch (e) {{}} }}
           }}
-          function go(s) {{ end = Date.now() + s * 1000; el.style.color = "#f5f2ff";
+          function go(s) {{ end = Date.now() + s * 1000; el.style.color = "#171a20";
             if (iv) clearInterval(iv); iv = setInterval(tick, 250); tick(); }}
           function stop() {{ if (iv) clearInterval(iv); iv = null; show(0); }}
           {"go(" + str(default_seconds) + ");" if autostart else "show(" + str(default_seconds) + ");"}
@@ -378,17 +384,60 @@ st.set_page_config(page_title="Conjugate Training Tool", page_icon="🏋️", la
 st.markdown(
     """
     <style>
-      .stApp {background:linear-gradient(155deg,#1b122d 0%,#28183f 55%,#161322 100%);color:#f5f2ff}
-      .block-container {max-width:1220px;padding-top:1.25rem;padding-bottom:3rem}
-      div[data-testid="stMetric"] {border:1px solid #5c417e;background:#332348;border-radius:14px;padding:12px 16px}
-      div[data-testid="stMetricValue"] {color:#f7f0ff}
-      div[data-testid="stMetricLabel"] {color:#d2c1e7}
-      .stButton>button[kind="primary"] {background:#7740ba;color:white;border-color:#9863d7}
-      h1,h2,h3 {color:#faf5ff}
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+      /* Base: white page, near-black text, one blue accent */
+      :root {--ink:#171a20; --muted:#5c5e62; --faint:#8e8e8e; --line:#e2e3e3; --card:#f4f4f4; --accent:#3e6ae1;}
+      html, body, .stApp, [class*="st-"], button, input, textarea, select {font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif}
+      .stApp {background:#ffffff; color:var(--ink)}
+      header[data-testid="stHeader"] {background:transparent; height:0}
+      div[data-testid="stDecoration"] {display:none}
+      .block-container {max-width:1180px; padding-top:0.5rem; padding-bottom:4rem}
+      h1, h2, h3, h4 {color:var(--ink); font-weight:500; letter-spacing:-0.01em}
+      h3 {font-size:1.15rem}
+      p, label, .stMarkdown {color:var(--ink)}
+      div[data-testid="stCaptionContainer"], .stCaption {color:var(--muted)}
+
+      /* Top bar */
+      .topbar {display:flex; align-items:center; justify-content:space-between; padding:14px 4px 6px}
+      .wordmark {font-size:15px; font-weight:700; letter-spacing:0.32em; text-transform:uppercase; color:var(--ink)}
+      .topbar .status {font-size:12px; color:var(--faint)}
+
+      /* Tabs become a centered, sticky text menu */
+      div[data-testid="stTabs"] > div:first-child {position:sticky; top:0; z-index:50; background:rgba(255,255,255,0.92);
+        backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-bottom:1px solid var(--line); margin-bottom:1.25rem}
+      div[data-baseweb="tab-list"] {justify-content:center; gap:4px; padding:6px 0}
+      button[data-baseweb="tab"] {background:transparent; border-radius:6px; padding:8px 14px; height:auto}
+      button[data-baseweb="tab"] p {font-size:14px; font-weight:500; color:var(--ink)}
+      button[data-baseweb="tab"]:hover {background:rgba(0,0,0,0.05)}
+      button[data-baseweb="tab"][aria-selected="true"] {background:rgba(0,0,0,0.06)}
+      div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {display:none}
+
+      /* Cards */
+      div[data-testid="stMetric"] {background:var(--card); border:0; border-radius:12px; padding:16px 18px}
+      div[data-testid="stMetricLabel"] p {color:var(--muted); font-size:13px; font-weight:500}
+      div[data-testid="stMetricValue"] {color:var(--ink); font-weight:600; font-size:1.7rem}
+      details[data-testid="stExpander"] {border:1px solid var(--line); border-radius:12px; background:#fff}
+      div[data-testid="stAlert"] {border-radius:10px}
+
+      /* Buttons: flat, rounded, blue primary */
+      .stButton > button, .stDownloadButton > button {border-radius:6px; font-weight:500; border:0;
+        background:var(--card); color:var(--ink); box-shadow:none; min-height:42px}
+      .stButton > button:hover, .stDownloadButton > button:hover {background:#e8e8e8; color:var(--ink)}
+      .stButton > button[kind="primary"] {background:var(--accent); color:#fff}
+      .stButton > button[kind="primary"]:hover {background:#3457b1; color:#fff}
+
+      /* Inputs: soft gray fields, no heavy borders */
+      div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-baseweb="base-input"] {background:var(--card); border-color:transparent; border-radius:6px}
+
+      hr {border-color:var(--line)}
+
       @media (max-width: 640px) {
-        .block-container {padding-left:.8rem;padding-right:.8rem}
-        div[data-testid="stMetricValue"] {font-size:1.35rem}
-        h1 {font-size:1.6rem}
+        .block-container {padding-left:.9rem; padding-right:.9rem}
+        div[data-testid="stMetricValue"] {font-size:1.3rem}
+        div[data-baseweb="tab-list"] {justify-content:flex-start; overflow-x:auto}
+        button[data-baseweb="tab"] {padding:8px 10px}
+        .topbar .status {display:none}
       }
     </style>
     """,
@@ -399,18 +448,20 @@ init_state()
 logs: list[dict] = st.session_state.logs
 now = datetime.now(timezone.utc)
 
-# HEADER
-header_text, header_image = st.columns([5, 1], vertical_alignment="center")
-with header_text:
-    st.title("🏋️ Conjugate Training Tool")
-    sync_note = "Synced to Google Sheets" if st.session_state._sheet_conn else "Session-only log (export CSV to keep it)"
-    st.caption(f"Your training day at a glance · Developed by Josh B · {sync_note}")
-with header_image:
-    gorilla = ROOT / "gorilla.png"
-    if gorilla.exists():
-        st.image(str(gorilla), width=105)
+# HEADER — slim top bar: logo + wordmark on the left, sync status on the right
+gorilla = ROOT / "gorilla.png"
+logo_html = ""
+if gorilla.exists():
+    logo_b64 = base64.b64encode(gorilla.read_bytes()).decode()
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="height:30px;margin-right:12px;vertical-align:middle">'
+sync_note = "Synced to Google Sheets" if st.session_state._sheet_conn else "Session-only log · export CSV to keep it"
+st.markdown(
+    f'<div class="topbar"><div style="display:flex;align-items:center">{logo_html}'
+    f'<span class="wordmark">Conjugate</span></div><span class="status">{sync_note}</span></div>',
+    unsafe_allow_html=True,
+)
 
-tab_today, tab_log, tab_progress, tab_ref = st.tabs(["🏋️ Today", "📝 Log sets", "📈 Progress", "ℹ️ Settings & reference"])
+tab_today, tab_log, tab_progress, tab_ref = st.tabs(["Today", "Log", "Progress", "Settings"])
 
 # --- Settings tab (rendered first in code so values are available everywhere) ---
 with tab_ref:
@@ -557,7 +608,7 @@ with tab_today:
                 reps = 10 if p < 0.4 else 5 if p < 0.55 else 3 if p < 0.70 else 2 if p < 0.85 else 1
             w = round_weight(base_max * p, rounding)
             st.write(f"**{fmt(p * 100)}%** · {fmt(w)} {unit} × {reps}  \n"
-                     f"<span style='color:#b9a6d6;font-size:.85em'>{plate_text(w, ucfg, unit)}</span>",
+                     f"<span style='color:#8e8e8e;font-size:.85em'>{plate_text(w, ucfg, unit)}</span>",
                      unsafe_allow_html=True)
         if not is_de:
             st.caption("Then take progressively heavier singles or triples up to your top set.")
@@ -757,4 +808,4 @@ with tab_ref:
 st.caption("Training suggestions are estimates; adjust by bar speed and RPE. "
            + ("Your log syncs to Google Sheets." if st.session_state._sheet_conn
               else "Your log lives in this browser session only, so export a CSV before closing.")
-           + "  ·  [Source on GitHub](https://github.com/Joshieb43/)")
+           + "  ·  Developed by Josh B  ·  [Source on GitHub](https://github.com/Joshieb43/)")
